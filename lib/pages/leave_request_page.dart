@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -14,6 +16,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
   final TextEditingController _dateFromController = TextEditingController();
 
   final TextEditingController _dateToController = TextEditingController();
+  final TextEditingController _substitueController = TextEditingController();
 
   bool ispressed = false;
 
@@ -49,12 +52,86 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
     }
   }
 
+  final List<Map<String, String>> personnelList = [
+    {'name': 'Lalit Roka', 'role': "senior UI/UX Engineer"},
+    {'name': 'Lalit roy', 'role': "senior  coder"},
+  ];
+
+  List<Map<String, String>> filterList = [];
+  String searchQuery = '';
+  @override
+  void initState() {
+    filterList = personnelList;
+    super.initState();
+  }
+
+  void updateSearchQuery(String query) {
+    setState(() {
+      searchQuery = query;
+      filterList = personnelList
+          .where((person) =>
+              person['name']!.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  void showSearchButton() {
+    showModalBottomSheet(
+        context: context,
+        builder: (context) {
+          return Padding(
+            padding: const EdgeInsets.only(
+              top: 10,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Search Personal',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (query) => updateSearchQuery(query),
+                  ),
+                ),
+                Expanded(
+                    child: filterList.isNotEmpty
+                        ? ListView.builder(itemBuilder: (context, index) {
+                            return ListTile(
+                              leading: CircleAvatar(
+                                child: Text(filterList[index]['name']![0]),
+                              ),
+                              title: Text(filterList[index]['name']!),
+                              subtitle: Text(filterList[index]['role']!),
+                              onTap: () {
+                                Navigator.pop(context, filterList[index]);
+                              },
+                            );
+                          })
+                        : const Center(
+                            child: Text('No User found'),
+                          )),
+              ],
+            ),
+          );
+        }).then((selectedPersonal) {
+      if (selectedPersonal != null) {
+        setState(() {
+          _substitueController.text = selectedPersonal['name']!;
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[200],
       body: Padding(
-          padding: const EdgeInsets.only(left: 20, right: 20),
+          padding: const EdgeInsets.only(left: 10, right: 10),
           child: SingleChildScrollView(
               child: Column(
             children: [
@@ -64,26 +141,31 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                      height: 40,
-                      width: 40,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(50),
-                        color: Colors.white,
-                      ),
-                      margin: const EdgeInsets.all(5),
-                      child: Icon(
-                        Icons.arrow_back,
-                        color: Colors.grey[600],
-                      )),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                        height: 30,
+                        width: 20,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(50),
+                          color: Colors.white,
+                        ),
+                        margin: const EdgeInsets.all(5),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.grey[600],
+                        )),
+                  ),
                   const Text(
                     'Apply Leave',
                     style:
                         TextStyle(fontSize: 17.28, fontWeight: FontWeight.w600),
                   ),
                   Container(
-                    height: 40,
-                    width: 40,
+                    height: 30,
+                    width: 20,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(50),
                       color: Colors.white,
@@ -253,7 +335,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
               ),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 SizedBox(
-                  width: 180,
+                  width: 150,
                   child: Column(
                     children: [
                       const Align(
@@ -283,7 +365,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                   ),
                 ),
                 SizedBox(
-                  width: 180,
+                  width: 150,
                   child: Column(
                     children: [
                       const Align(
@@ -319,17 +401,28 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
               const Align(
                   alignment: Alignment.bottomLeft,
                   child: Text('Substitue Personnel')),
-              Container(
-                height: 42,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(5),
-                  color: Colors.white,
-                ),
-                child: const TextField(
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    enabledBorder: InputBorder.none,
+              InkWell(
+                onTap: () {
+                  showSearchButton();
+                },
+                child: Center(
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(5),
+                      color: Colors.white,
+                    ),
+                    child: SafeArea(
+                      child: TextField(
+                        controller: _substitueController,
+                        enabled: false,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

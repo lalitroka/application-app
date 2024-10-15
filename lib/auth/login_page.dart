@@ -163,7 +163,9 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 height: 40,
                 child: GestureDetector(
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pushNamed(context, '/dashboardpage');
+                  },
                   child: const Center(
                     child: Text(
                       "Login",
