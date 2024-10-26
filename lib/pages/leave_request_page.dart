@@ -1,5 +1,7 @@
 import 'dart:developer';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firstdemo/database/leave_request.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -17,6 +19,10 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
 
   final TextEditingController _dateToController = TextEditingController();
   final TextEditingController _substitueController = TextEditingController();
+
+  final TextEditingController _workStatusController = TextEditingController();
+  final TextEditingController _reasonController = TextEditingController();
+  String _approver = '';
 
   bool ispressed = false;
 
@@ -52,32 +58,38 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
     }
   }
 
-  final List<Map<String, String>> personnelList = [
-    {'name': 'Lalit Roka', 'role': "senior UI/UX Engineer"},
-    {'name': 'Lalit roy', 'role': "senior  coder"},
-  ];
+  List<Map<String, dynamic>> filterList = [];
 
-  List<Map<String, String>> filterList = [];
   String searchQuery = '';
-  @override
-  void initState() {
-    filterList = personnelList;
-    super.initState();
-  }
 
-  void updateSearchQuery(String query) {
-    setState(() {
-      searchQuery = query;
-      filterList = personnelList
-          .where((person) =>
-              person['name']!.toLowerCase().contains(query.toLowerCase()))
-          .toList();
-    });
+  void updateSearchQuery(String query) async {
+    if (query.isNotEmpty) {
+      QuerySnapshot personalSnapshot = await FirebaseFirestore.instance
+          .collection('profiles')
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where('name', isLessThanOrEqualTo: query + '\uf8ff')
+          .get();
+
+      setState(() {
+        filterList = personalSnapshot.docs.map((doc) {
+          return {
+            'name': doc['name'],
+            'position': doc['position'],
+            'imageUrl': doc['imageUrl'] ?? '',
+          };
+        }).toList();
+      });
+    } else {
+      setState(() {
+        filterList = [];
+      });
+    }
   }
 
   void showSearchButton() {
     showModalBottomSheet(
         context: context,
+        isScrollControlled: true,
         builder: (context) {
           return Padding(
             padding: const EdgeInsets.only(
@@ -99,18 +111,24 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                 ),
                 Expanded(
                     child: filterList.isNotEmpty
-                        ? ListView.builder(itemBuilder: (context, index) {
-                            return ListTile(
-                              leading: CircleAvatar(
-                                child: Text(filterList[index]['name']![0]),
-                              ),
-                              title: Text(filterList[index]['name']!),
-                              subtitle: Text(filterList[index]['role']!),
-                              onTap: () {
-                                Navigator.pop(context, filterList[index]);
-                              },
-                            );
-                          })
+                        ? ListView.builder(
+                            itemCount: filterList.length,
+                            itemBuilder: (context, index) {
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundImage:
+                                      filterList[index]['imageUrl']!.isNotEmpty
+                                          ? NetworkImage(
+                                              filterList[index]['imageUrl']!)
+                                          : AssetImage('asset/star.png'),
+                                ),
+                                title: Text(filterList[index]['name']!),
+                                subtitle: Text(filterList[index]['position']!),
+                                onTap: () {
+                                  Navigator.pop(context, filterList[index]);
+                                },
+                              );
+                            })
                         : const Center(
                             child: Text('No User found'),
                           )),
@@ -118,7 +136,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
             ),
           );
         }).then((selectedPersonal) {
-      if (selectedPersonal != null) {
+      if (selectedPersonal.isNotEmpty) {
         setState(() {
           _substitueController.text = selectedPersonal['name']!;
         });
@@ -126,6 +144,117 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
     });
   }
 
+  void showSearchApprover() {
+    showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) {
+          return Padding(
+            padding: const EdgeInsets.only(
+              top: 10,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Search Approver',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (query) => updateSearchQuery(query),
+                  ),
+                ),
+                Expanded(
+                    child: filterList.isNotEmpty
+                        ? ListView.builder(
+                            itemCount: filterList.length,
+                            itemBuilder: (context, index) {
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundImage:
+                                      filterList[index]['imageUrl']!.isNotEmpty
+                                          ? NetworkImage(
+                                              filterList[index]['imageUrl']!)
+                                          : AssetImage('asset/star.png'),
+                                ),
+                                title: Text(filterList[index]['name']!),
+                                subtitle: Text(filterList[index]['position']!),
+                                onTap: () {
+                                  Navigator.pop(context, filterList[index]);
+                                },
+                              );
+                            })
+                        : const Center(
+                            child: Text('No User found'),
+                          )),
+              ],
+            ),
+          );
+        }).then((selectedPersonal) {
+      if (selectedPersonal.isNotEmpty) {
+        setState(() {
+          _approver = selectedPersonal['name']!;
+        });
+      }
+    });
+  }
+
+  void _submitLeaveRequest() async {
+    if (_leaveController.text.isEmpty ||
+        _dateFromController.text.isEmpty ||
+        _dateToController.text.isEmpty ||
+        _substitueController.text.isEmpty ||
+        _workStatusController.text.isEmpty ||
+        selectedLeaveType.isEmpty ||
+        _reasonController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
+    }
+
+    try {
+      // Prepare the data to send to Firestore
+      Map<String, dynamic> leaveRequest = {
+        'leaveType': _leaveController.text,
+        'fromDate': _dateFromController.text,
+        'toDate': _dateToController.text,
+        'substitutePersonnel': _substitueController.text,
+        'workStatus': _workStatusController.text,
+        'selectedLeaveType': selectedLeaveType,
+        'reason': _reasonController.text,
+        'status': 'pending', // Initial status
+        'approverId': 'approver_user_id', // Replace with actual approver ID
+      };
+
+      // Add the leave request to Firestore
+      await FirebaseFirestore.instance
+          .collection('leaveRequests')
+          .add(leaveRequest);
+
+      // Insert the leave request into the local database
+      await LeaveRequestDatabase().insertLeaveRequest(leaveRequest);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Leave request submitted successfully!')),
+      );
+
+      // Optionally, navigate back or clear the form
+      Navigator.pop(context);
+    } catch (e) {
+      // Handle error (e.g., show error message)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error submitting leave request: $e')),
+      );
+    }
+  }
+
+  int selectButton = -1;
+  String selectedLeaveType = '';
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -146,8 +275,8 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                       Navigator.pop(context);
                     },
                     child: Container(
-                        height: 30,
-                        width: 20,
+                        height: 40,
+                        width: 40,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(50),
                           color: Colors.white,
@@ -183,67 +312,35 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Stack(children: [
-                      Container(
-                        height: 80,
-                        width: 170,
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(47, 155, 242, 1),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                      ),
-                      const Positioned(
-                          top: 5,
-                          left: 5,
-                          child: Text(
-                            'Leave Left',
-                            style: TextStyle(color: Colors.white),
-                          )),
-                      const Positioned(
-                          right: 15,
-                          bottom: 10,
-                          child: Text(
-                            '18',
-                            style: TextStyle(fontSize: 20, color: Colors.white),
-                          )),
-                    ]),
-                    Stack(children: [
-                      Container(
-                        height: 80,
-                        width: 170,
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(236, 81, 81, 1),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                      ),
-                      const Positioned(
-                          top: 5,
-                          left: 5,
-                          child: Text(
-                            'Leave Left',
-                            style: TextStyle(color: Colors.white),
-                          )),
-                      const Positioned(
-                          right: 15,
-                          bottom: 10,
-                          child: Text(
-                            '18',
-                            style: TextStyle(fontSize: 20, color: Colors.white),
-                          )),
-                    ]),
+                    _topcontainer(
+                      'leave left',
+                      18,
+                      const Color.fromRGBO(47, 155, 242, 1),
+                    ),
+                    _topcontainer(
+                      'leave token ',
+                      1,
+                      const Color.fromRGBO(236, 81, 81, 1),
+                    )
                   ],
                 ),
               ),
               const SizedBox(
                 height: 10,
               ),
-              const Row(
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('Leave Approver'),
-                  Text(
-                    'Smaran Duwadi',
-                    style: TextStyle(color: Color.fromARGB(255, 114, 83, 83)),
+                  InkWell(
+                    onTap: () {
+                      showSearchApprover();
+                    },
+                    child: Text(
+                      _approver.isNotEmpty ? _approver : ' SelectApprover',
+                      style: const TextStyle(
+                          color: Color.fromARGB(255, 114, 83, 83)),
+                    ),
                   )
                 ],
               ),
@@ -255,21 +352,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                   child: Text(
                     "Leave Type",
                   )),
-              Container(
-                height: 42,
-                decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(5),
-                    color: Colors.white),
-                child: TextField(
-                  controller: _leaveController,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    hintText: "Casual Leave(sick+emergency)",
-                  ),
-                ),
-              ),
+              _textFieldContainer('casual leave', _leaveController),
               const SizedBox(
                 height: 10,
               ),
@@ -278,56 +361,83 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
+                  // Full Day Button
                   TextButton(
-                      onPressed: () {
-                        setState(() {
-                          ispressed = !ispressed;
-                        });
-                      },
-                      child: Container(
-                          height: 40,
-                          width: 80,
-                          decoration: BoxDecoration(
-                            color: ispressed ? Colors.black : Colors.green,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Center(
-                              child: Text('Full Day ',
-                                  style: TextStyle(color: Colors.white))))),
+                    onPressed: selectButton != 0
+                        ? () {
+                            setState(() {
+                              selectButton =
+                                  0; // Set selected button index to 0
+                              selectedLeaveType =
+                                  'Full Day'; // Update selected leave type
+                            });
+                          }
+                        : null,
+                    child: Container(
+                      height: 40,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: selectButton == 0 ? Colors.black : Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Center(
+                        child: Text('Full Day',
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ),
+
+                  // First Half Button
                   TextButton(
-                      onPressed: () {
-                        setState(() {
-                          ispressed = !ispressed;
-                        });
-                      },
-                      child: Container(
-                          height: 40,
-                          width: 80,
-                          decoration: BoxDecoration(
-                            color: ispressed ? Colors.black : Colors.green,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Center(
-                              child: Text('First Half',
-                                  style: TextStyle(color: Colors.white))))),
+                    onPressed: selectButton != 1
+                        ? () {
+                            setState(() {
+                              selectButton =
+                                  1; // Set selected button index to 1
+                              selectedLeaveType =
+                                  'First Half'; // Update selected leave type
+                            });
+                          }
+                        : null,
+                    child: Container(
+                      height: 40,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: selectButton == 1 ? Colors.black : Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Center(
+                        child: Text('First Half',
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ),
+
+                  // Second Half Button
                   TextButton(
-                      onPressed: () {
-                        setState(() {
-                          ispressed = !ispressed;
-                        });
-                      },
-                      child: Container(
-                          height: 40,
-                          width: 80,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(4),
-                            color: ispressed ? Colors.blue : Colors.green,
-                          ),
-                          child: const Center(
-                              child: Text(
-                            'Second Half',
-                            style: TextStyle(color: Colors.white),
-                          )))),
+                    onPressed: selectButton != 2
+                        ? () {
+                            setState(() {
+                              selectButton =
+                                  2; // Set selected button index to 2
+                              selectedLeaveType =
+                                  'Second Half'; // Update selected leave type
+                            });
+                          }
+                        : null,
+                    child: Container(
+                      height: 40,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: selectButton == 2 ? Colors.black : Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Center(
+                        child: Text('Second Half',
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(
@@ -344,22 +454,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                         onTap: () {
                           _selectedFromDate(context);
                         },
-                        child: Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                          child: TextField(
-                            enabled: false,
-                            controller: _dateFromController,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                            ),
-                          ),
-                        ),
+                        child: _dateContainer(_dateFromController),
                       ),
                     ],
                   ),
@@ -374,22 +469,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                         onTap: () {
                           _selectedToDate(context);
                         },
-                        child: Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(5),
-                            color: Colors.white,
-                          ),
-                          child: TextField(
-                            controller: _dateToController,
-                            enabled: false,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                            ),
-                          ),
-                        ),
+                        child: _dateContainer(_dateToController),
                       ),
                     ],
                   ),
@@ -406,23 +486,9 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                   showSearchButton();
                 },
                 child: Center(
-                  child: Container(
-                    height: 42,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5),
-                      color: Colors.white,
-                    ),
-                    child: SafeArea(
-                      child: TextField(
-                        controller: _substitueController,
-                        enabled: false,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                        ),
-                      ),
-                    ),
+                  child: IgnorePointer(
+                    child: _textFieldContainer(
+                        'search personal', _substitueController),
                   ),
                 ),
               ),
@@ -437,20 +503,7 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                 decoration: const BoxDecoration(
                   color: Colors.white,
                 ),
-                child: Container(
-                  height: 42,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(5),
-                    color: Colors.white,
-                  ),
-                  child: const TextField(
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                    ),
-                  ),
-                ),
+                child: _textFieldContainer('labeltext', _workStatusController),
               ),
               const SizedBox(
                 height: 10,
@@ -466,12 +519,13 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                       borderRadius: BorderRadius.circular(5),
                       color: Colors.white,
                     ),
-                    child: const TextField(
+                    child: TextField(
+                      controller: _reasonController,
                       textAlignVertical: TextAlignVertical.top,
                       expands: true,
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         border: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         enabledBorder: InputBorder.none,
@@ -487,10 +541,12 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
                 width: double.infinity,
                 height: 40,
                 child: GestureDetector(
-                  onTap: () {},
+                  onTap: () {
+                    _submitLeaveRequest();
+                  },
                   child: const Center(
                     child: Text(
-                      "Login",
+                      "Apply",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
@@ -503,4 +559,68 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
           ))),
     );
   }
+}
+
+Widget _topcontainer(String title, int value, Color boxColor) {
+  return Stack(children: [
+    Container(
+      height: 80,
+      width: 160,
+      decoration: BoxDecoration(
+        color: boxColor,
+        borderRadius: BorderRadius.circular(5),
+      ),
+    ),
+    Positioned(
+        top: 5,
+        left: 5,
+        child: Text(
+          title,
+          style: const TextStyle(color: Colors.white),
+        )),
+    Positioned(
+        right: 15,
+        bottom: 10,
+        child: Text(
+          value.toString(),
+          style: const TextStyle(fontSize: 20, color: Colors.white),
+        )),
+  ]);
+}
+
+Widget _textFieldContainer(
+    String? labeltext, TextEditingController controllerType) {
+  return Container(
+    height: 42,
+    decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(5), color: Colors.white),
+    child: TextField(
+      controller: controllerType,
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        hintText: "Casual Leave(sick+emergency)",
+      ),
+    ),
+  );
+}
+
+Widget _dateContainer(TextEditingController dateContoller) {
+  return Container(
+    height: 42,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: TextField(
+      enabled: false,
+      controller: dateContoller,
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        enabledBorder: InputBorder.none,
+      ),
+    ),
+  );
 }

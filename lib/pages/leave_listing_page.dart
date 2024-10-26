@@ -1,3 +1,4 @@
+import 'package:firstdemo/database/leave_request.dart';
 import 'package:flutter/material.dart';
 
 class LeaveListingPage extends StatefulWidget {
@@ -9,14 +10,21 @@ class LeaveListingPage extends StatefulWidget {
 
 class _LeaveListingPageState extends State<LeaveListingPage>
     with SingleTickerProviderStateMixin {
-
-
   late TabController _tabController;
+  List<Map<String, dynamic>> _leaveRequests = [];
 
   @override
   void initState() {
     _tabController = TabController(length: 2, vsync: this);
+    _fetchLeaveRequests();
     super.initState();
+  }
+
+  Future<void> _fetchLeaveRequests() async {
+    final leaveRequests = await LeaveRequestDatabase().getLeaveRequests();
+    setState(() {
+      _leaveRequests = leaveRequests; // Store the retrieved leave requests
+    });
   }
 
   @override
@@ -50,20 +58,14 @@ class _LeaveListingPageState extends State<LeaveListingPage>
         ),
         title: const Row(
           children: [
-            SizedBox(
-              width: 50,
-            ),
+            SizedBox(width: 50),
             Text('Leave Listing'),
           ],
         ),
         backgroundColor: Colors.grey[200],
         bottom: TabBar(controller: _tabController, tabs: const [
-          Tab(
-            text: 'My Leave',
-          ),
-          Tab(
-            text: 'Leave Request',
-          )
+          Tab(text: 'My Leave'),
+          Tab(text: 'Leave Request'),
         ]),
       ),
       body: TabBarView(
@@ -77,53 +79,55 @@ class _LeaveListingPageState extends State<LeaveListingPage>
   }
 
   Widget _myLeaveTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Pending',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          ListView.builder(
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pending',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            ListView.builder(
               shrinkWrap: true,
-              itemCount: 2,
-              itemBuilder: (context, int index) {
-                return _leaveCard('Personal Leave', '2020-01-17', true,
-                    isPending: true);
-              }),
-          const SizedBox(height: 20),
-          const Text(
-            'History',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          ListView.builder(
-              shrinkWrap: true,
-              itemCount: 2,
-              itemBuilder: (BuildContext, int index) {
-                return _leaveCard('Personal Leave', '2020-01-17', true,
-                    isPending: true);
-              }),
-          const SizedBox(height: 10),
-        ],
+              itemCount: _leaveRequests.length, // Use the state variable
+              itemBuilder: (context, index) {
+                final leaveRequest = _leaveRequests[index];
+                return _leaveCard(
+                  leaveRequest['leaveType'] ?? 'Unknown',
+                  leaveRequest['fromDate'] ?? 'unknown',
+                  leaveRequest['toDate'] ?? 'unknown',
+                  leaveRequest['status'] == 'approved',
+                  isPending: leaveRequest['status'] == 'pending',
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'History',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            // You can add another ListView for history or filter it as needed
+          ],
+        ),
       ),
     );
   }
 
   Widget _leaveRequestTab() {
     return Center(
-        child: ListView.builder(
-            itemCount: 2,
-            itemBuilder: (BuildContext, int index) {
-              return InkWell(
-                  onTap: () => requestDetial(),
-                  child: _leaveCard('leaveType', 'date', true));
-            }));
+      child: ListView.builder(
+        itemCount: 1,
+        itemBuilder: (BuildContext context, int index) {
+          return Center(child: Text('No Request'));
+        },
+      ),
+    );
   }
 
-  Future<dynamic> requestDetial() {
+  Future<dynamic> requestDetail() {
     return showModalBottomSheet(
       backgroundColor: Colors.transparent,
       context: context,
@@ -273,7 +277,33 @@ class _LeaveListingPageState extends State<LeaveListingPage>
     );
   }
 
-  Widget _leaveCard(String leaveType, String date, bool approved,
+  Widget _buildLeaveInfo(String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 20, right: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.white70,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _leaveCard(String leaveType, String date, String todate, bool approved,
       {bool isPending = false}) {
     return Card(
       elevation: 2,
@@ -288,12 +318,25 @@ class _LeaveListingPageState extends State<LeaveListingPage>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  date,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Text(
+                      date,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text('to'),
+                    Text(
+                      todate,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -318,30 +361,4 @@ class _LeaveListingPageState extends State<LeaveListingPage>
       ),
     );
   }
-}
-
-Widget _buildLeaveInfo(String title, String value) {
-  return Padding(
-    padding: const EdgeInsets.only(left: 20, right: 20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.white70,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      ],
-    ),
-  );
 }

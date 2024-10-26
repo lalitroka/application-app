@@ -1,205 +1,355 @@
+import 'package:firstdemo/bloc/profile_bloc.dart';
+import 'package:firstdemo/bloc/profile_state.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final String? employeeId;
+
+  const ProfilePage({super.key, this.employeeId});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  _ProfilePageState createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final _formKey = GlobalKey<FormState>(); // Form key for validation
+
+  DateTime? _selectDOB;
+  DateTime? _selectAppointment;
   File? _image;
+  bool isEditMode = false;
+  bool _isProfileLoaded = false;
 
-  Future<void> _pickedimage() async {
-    final pickedfile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+  late TextEditingController nameController;
+  late TextEditingController positionController;
+  late TextEditingController employeeIdController;
+  late TextEditingController contactNoController;
+  late TextEditingController emergencyContactController;
+  late TextEditingController appointedDateController;
+  late TextEditingController bloodTypeController;
+  late TextEditingController dobController;
+  late TextEditingController panNoController;
 
-    if (pickedfile != null) {
-      setState(() {
-        _image = File(pickedfile.path);
-      });
+  final textOnlyFormatter = [
+    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+  ];
+
+  final phoneNumberFormatter = [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(10),
+  ];
+
+  final panNumberFormatter = [
+    FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]')),
+    LengthLimitingTextInputFormatter(10),
+  ];
+
+  final bloodTypeFormatter = [
+    FilteringTextInputFormatter.allow(RegExp(r'[ABOab+−-]')),
+    LengthLimitingTextInputFormatter(3),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController();
+    positionController = TextEditingController();
+    employeeIdController = TextEditingController();
+    contactNoController = TextEditingController();
+    emergencyContactController = TextEditingController();
+    bloodTypeController = TextEditingController();
+    panNoController = TextEditingController();
+    dobController = TextEditingController();
+    appointedDateController = TextEditingController();
+    _loadProfile();
+
+    if (widget.employeeId != null) {
+      context.read<ProfileBloc>().add(LoadProfileEvent(widget.employeeId!));
     }
   }
 
   @override
+  void dispose() {
+    nameController.dispose();
+    positionController.dispose();
+    employeeIdController.dispose();
+    contactNoController.dispose();
+    emergencyContactController.dispose();
+    bloodTypeController.dispose();
+    panNoController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+      });
+      _saveProfile();
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString('name', nameController.text);
+    await prefs.setString('position', positionController.text);
+    await prefs.setString('employeeId', employeeIdController.text);
+    await prefs.setString('contactNo', contactNoController.text);
+    await prefs.setString('emergencyContact', emergencyContactController.text);
+    await prefs.setString('dob', dobController.text);
+    await prefs.setString('bloodType', bloodTypeController.text);
+    await prefs.setString('appointedDate', appointedDateController.text);
+    await prefs.setString('panNo', panNoController.text);
+
+    if (_image != null) {
+      await prefs.setString('profilePhoto', _image!.path);
+    }
+  }
+
+  void _loadProfile() async {
+    if (_isProfileLoaded) return;
+
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      nameController.text = prefs.getString('name') ?? '';
+      positionController.text = prefs.getString('position') ?? '';
+      employeeIdController.text = prefs.getString('employeeId') ?? '';
+      contactNoController.text = prefs.getString('contactNo') ?? '';
+      emergencyContactController.text =
+          prefs.getString('emergencyContact') ?? '';
+      dobController.text = prefs.getString('dob') ?? '';
+      bloodTypeController.text = prefs.getString('bloodType') ?? '';
+      appointedDateController.text = prefs.getString('appointedDate') ?? '';
+      panNoController.text = prefs.getString('panNo') ?? '';
+
+      String? imagePath = prefs.getString('profilePhoto');
+      if (imagePath != null) {
+        _image = File(imagePath);
+      }
+
+      _isProfileLoaded = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-          image: DecorationImage(
-        image: AssetImage('asset/dashboard.png'),
-        fit: BoxFit.cover,
-      )),
+    return BlocProvider(
+      create: (context) => ProfileBloc(),
       child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 30),
-              child: InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: Container(
-                    margin: const EdgeInsets.only(left: 20, top: 10),
-                    height: 40,
-                    width: 40,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(50),
-                      color: Colors.white,
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back,
-                      color: Colors.black,
-                    )),
-              ),
+        appBar: AppBar(
+          title: const Text('Profile'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () {
+                setState(() {
+                  isEditMode = !isEditMode;
+                });
+              },
             ),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(37, 38, 39, 0.64),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.7),
-                        spreadRadius: 5,
-                        blurRadius: 100,
-                        blurStyle: BlurStyle.inner)
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(
-                      height: 5,
-                    ),
-                    Container(
-                        height: 90,
-                        width: 90,
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(37, 38, 39, 0.64),
-                          borderRadius: BorderRadius.circular(50),
-                        ),
-                        child: _image != null
-                            ? Image.file(_image!)
-                            : Container(
-                                height: 40,
-                                width: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(50),
-                                ),
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 80,
-                                  color: Color.fromARGB(255, 183, 124, 120),
-                                ),
-                              )),
-                    const SizedBox(
-                      height: 5,
-                    ),
-                    const Text(
-                      'Emily Browser',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const Text(
-                      'Senior UI/Ux Engineer',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(
-                      height: 10,
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          height: 40,
-                          width: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: const Icon(
-                            Icons.email,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(
-                          width: 10,
-                        ),
-                        Container(
-                          height: 40,
-                          width: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: const Icon(
-                            Icons.call,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 40,
-                    ),
-                    _profiledetial('Employee ID', '201'),
-                    _buildDivider(),
-                    _profiledetial('Contact no.', '983834343'),
-                    _buildDivider(),
-                    _profiledetial('Emerrgency Contact no.', '98384843'),
-                    _buildDivider(),
-                    _profiledetial('DOB', '20-04-2004'),
-                    _buildDivider(),
-                    _profiledetial('Blood Type', 'B+'),
-                    _buildDivider(),
-                    _profiledetial('Appointed Date', '12-03-2019'),
-                    _buildDivider(),
-                    _profiledetial('PAN no.', '2014324'),
-                    _buildDivider(),
-                  ],
-                ),
-              ),
-            )
           ],
+        ),
+        body: BlocBuilder<ProfileBloc, ProfileState>(
+          builder: (context, state) {
+            if (state is ProfileLoaded) {
+              return Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _image != null
+                                ? FileImage(_image!)
+                                : const AssetImage('asset/star.png')
+                                    as ImageProvider,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildProfileField('Name', nameController,
+                          inputFormatters: textOnlyFormatter,
+                          keyboardType: TextInputType.text),
+                      _buildProfileField('Position', positionController,
+                          inputFormatters: textOnlyFormatter,
+                          keyboardType: TextInputType.text),
+                      _buildProfileField('Employee ID', employeeIdController,
+                          inputFormatters: phoneNumberFormatter,
+                          keyboardType: TextInputType.phone),
+                      _buildProfileField('Contact No.', contactNoController,
+                          inputFormatters: phoneNumberFormatter,
+                          keyboardType: TextInputType.phone),
+                      _buildProfileField(
+                          'Emergency Contact', emergencyContactController,
+                          inputFormatters: phoneNumberFormatter,
+                          keyboardType: TextInputType.phone),
+                      InkWell(
+                        onTap: () => _selectedDOB(context),
+                        child: AbsorbPointer(
+                          child: _buildProfileField('DOB', dobController,
+                              readOnly: true),
+                        ),
+                      ),
+                      _buildProfileField('Blood Type', bloodTypeController,
+                          inputFormatters: bloodTypeFormatter),
+                      InkWell(
+                        onTap: () => _selectedappointment(context),
+                        child: AbsorbPointer(
+                          child: _buildProfileField(
+                              'Appointed Date', appointedDateController),
+                        ),
+                      ),
+                      _buildProfileField('PAN No.', panNoController,
+                          inputFormatters: panNumberFormatter,
+                          keyboardType: TextInputType.number),
+                      const SizedBox(height: 20),
+                      if (isEditMode)
+                        ElevatedButton(
+                          onPressed: () async {
+                            if (_formKey.currentState!.validate()) {
+                              await _saveProfile();
+                              if (widget.employeeId == null ||
+                                  widget.employeeId!.isEmpty) {
+                                context
+                                    .read<ProfileBloc>()
+                                    .add(CreateProfileEvent(
+                                      name: nameController.text,
+                                      position: positionController.text,
+                                      contactNo: contactNoController.text,
+                                      emergencyContact:
+                                          emergencyContactController.text,
+                                      dob: dobController.text,
+                                      bloodType: bloodTypeController.text,
+                                      appointedDate:
+                                          appointedDateController.text,
+                                      panNo: panNoController.text,
+                                      image: _image,
+                                      employeeId: employeeIdController.text,
+                                    ));
+                              } else {
+                                context
+                                    .read<ProfileBloc>()
+                                    .add(UpdateProfileEvent(
+                                      name: nameController.text,
+                                      position: positionController.text,
+                                      employeeId: widget.employeeId!,
+                                      contactNo: contactNoController.text,
+                                      emergencyContact:
+                                          emergencyContactController.text,
+                                      dob: dobController.text,
+                                      bloodType: bloodTypeController.text,
+                                      appointedDate:
+                                          appointedDateController.text,
+                                      panNo: panNoController.text,
+                                      image: _image,
+                                    ));
+                              }
+                              setState(() {
+                                isEditMode = false;
+                              });
+                            }
+                          },
+                          child: const Text('Save Profile'),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            } else if (state is ProfileError) {
+              return Center(child: Text(state.message));
+            }
+            return const SizedBox.shrink();
+          },
         ),
       ),
     );
   }
-}
 
-Widget _profiledetial(String text, String value) {
-  return Padding(
-    padding: const EdgeInsets.only(left: 20, right: 20),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          text,
-          style: const TextStyle(color: Color.fromARGB(255, 197, 165, 165)),
+  Widget _buildProfileField(
+    String label,
+    TextEditingController controller, {
+    bool readOnly = false,
+    List<TextInputFormatter>? inputFormatters,
+    TextInputType? keyboardType,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: TextFormField(
+        controller: controller,
+        readOnly: !isEditMode || readOnly,
+        inputFormatters: inputFormatters,
+        keyboardType: keyboardType,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return '$label is required';
+          }
+          if (label == 'DOB' || label == 'Appointed Date') {
+            return dateValidator(value);
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          hintText: label,
+          border: const OutlineInputBorder(),
+          enabled: isEditMode && !readOnly,
         ),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 18, color: Colors.white),
-        )
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 
-// Divider for profile details
-Widget _buildDivider() {
-  return const Divider(
-    height: 25,
-    endIndent: 20,
-    indent: 20,
-    thickness: 0.3,
-  );
+  Future<void> _selectedDOB(BuildContext context) async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectDOB ?? DateTime.now(),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (pickedDate != null) {
+      setState(() {
+        _selectDOB = pickedDate;
+        dobController.text = DateFormat('yyyy-MM-dd').format(pickedDate);
+      });
+    }
+  }
+
+  Future<void> _selectedappointment(BuildContext context) async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectAppointment ?? DateTime.now(),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (pickedDate != null) {
+      setState(() {
+        _selectAppointment = pickedDate;
+        appointedDateController.text =
+            DateFormat('yyyy-MM-dd').format(pickedDate);
+      });
+    }
+  }
+
+  String? dateValidator(String date) {
+    try {
+      DateFormat('yyyy-MM-dd').parseStrict(date);
+      return null;
+    } catch (e) {
+      return 'Invalid date format';
+    }
+  }
 }

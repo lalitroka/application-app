@@ -13,7 +13,8 @@ class SettingPage extends StatefulWidget {
 class _SettingPageState extends State<SettingPage> {
   final List<File> _images = []; // List to store selected images
 
-  // Method to pick an image from the gallery
+  int visibleImages = 5;
+
   Future<void> _pickImage() async {
     final pickedFile =
         await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -97,33 +98,15 @@ class _SettingPageState extends State<SettingPage> {
                       ),
                     ),
                     InkWell(
-                      onTap: () => Navigator.pushNamed(context, '/profilepage'),
-                      child: const ListTile(
-                        leading: Icon(
-                          Icons.person_outline,
-                          color: Colors.white,
-                        ),
-                        title: Text(
-                          'Profile',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                    const Divider(
-                      endIndent: 20,
-                      indent: 20,
-                      height: 10,
-                    ),
-                    ListTile(
-                      leading: const Icon(
-                        Icons.person_2_outlined,
-                        color: Colors.white,
-                      ),
-                      title: const Text(
-                        'Auto Check-in',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      trailing: Transform.scale(
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/profilepage'),
+                        child: _listTile(
+                            'profile', const Icon(Icons.person_outlined))),
+                    divider(),
+                    _listTile(
+                      'Auto Check-in ',
+                      const Icon(Icons.person_2),
+                      iconT: Transform.scale(
                         scaleX: 1,
                         scaleY: 0.9,
                         child: Switch(
@@ -135,55 +118,100 @@ class _SettingPageState extends State<SettingPage> {
                         ),
                       ),
                     ),
-                    const Divider(
-                      endIndent: 20,
-                      indent: 20,
-                      height: 10,
-                    ),
-                    const ListTile(
-                      leading: Icon(
-                        Icons.image,
-                        color: Colors.white,
-                      ),
-                      title: Text(
-                        'Display Wallpaper',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
+                    divider(),
+                    _listTile('Display Wallpaper', const Icon(Icons.image)),
                     const SizedBox(
                       height: 10,
                     ),
                     _images.isEmpty
-                        ? Container(
-                            margin: const EdgeInsets.only(left: 45),
-                            width: 70,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(7),
-                              color: Colors.white,
-                            ),
-                            child: const Icon(
-                              Icons.add,
-                              color: Colors.red,
-                              size: 30,
+                        ? InkWell(
+                            onTap: () {
+                              _pickImage();
+                            },
+                            child: Container(
+                              height: 70,
+                              width: 70,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(7),
+                                color: Colors.white,
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                color: Colors.red,
+                                size: 30,
+                              ),
                             ),
                           )
                         : GridView.builder(
-                            itemCount: _images.length,
+                            shrinkWrap:
+                                true, // Helps to avoid unbounded height errors
+                            itemCount: _images.length > visibleImages
+                                ? visibleImages + 1
+                                : _images.length + 1,
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3),
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 8.0,
+                              mainAxisSpacing: 8.0,
+                              childAspectRatio: 1,
+                            ),
                             itemBuilder: (BuildContext context, int index) {
-                              return Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Image.file(
-                                  _images[index],
-                                  height: 60,
-                                  width: 80,
-                                  fit: BoxFit.cover,
-                                ),
-                              );
-                            }),
+                              if (index == 0) {
+                                return InkWell(
+                                  onTap: () {
+                                    _pickImage();
+                                  },
+                                  child: Container(
+                                    height: 40,
+                                    width: 40,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(7),
+                                      color: Colors.white,
+                                    ),
+                                    child: const Icon(
+                                      Icons.add,
+                                      color: Colors.red,
+                                      size: 30,
+                                    ),
+                                  ),
+                                );
+                              } else if (_images.length > visibleImages &&
+                                  index == visibleImages) {
+                                // If there are more than visibleImages, show "See More" button
+                                return InkWell(
+                                  onTap: () {
+                                    Navigator.pushNamed(context,
+                                        '/photopage'); // Navigate to another screen or modal
+                                  },
+                                  child: Container(
+                                    height: 40,
+                                    width: 40,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(7),
+                                      color: Colors.grey[200],
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        "See More",
+                                        style: TextStyle(
+                                            color: Colors.blue, fontSize: 16),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                return Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Image.file(
+                                    _images[index - 1],
+                                    height: 60,
+                                    width: 80,
+                                    fit: BoxFit.cover,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                     const SizedBox(
                       height: 14,
                     ),
@@ -191,31 +219,9 @@ class _SettingPageState extends State<SettingPage> {
                       endIndent: 20,
                       indent: 20,
                     ),
-                    const ListTile(
-                      leading: Icon(
-                        Icons.logout_sharp,
-                        color: Colors.white,
-                      ),
-                      title: Text(
-                        'Logout',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    const Divider(
-                      endIndent: 20,
-                      indent: 20,
-                      height: 10,
-                    ),
-                    const ListTile(
-                      leading: Icon(
-                        Icons.info_outline,
-                        color: Colors.white,
-                      ),
-                      title: Text(
-                        'About App',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
+                    _listTile('Logout', const Icon(Icons.logout_outlined)),
+                    divider(),
+                    _listTile('About App', const Icon(Icons.info_outline)),
                   ],
                 ),
               ),
@@ -225,4 +231,28 @@ class _SettingPageState extends State<SettingPage> {
       ),
     );
   }
+
+  Widget divider() {
+    return const Divider(
+      endIndent: 20,
+      indent: 20,
+      height: 10,
+    );
+  }
+
+  void _showMoreImages() {}
+}
+
+Widget _listTile(String titleName, Icon iconL, {Widget? iconT}) {
+  return ListTile(
+    leading: Icon(
+      iconL.icon,
+      color: Colors.white,
+    ),
+    title: Text(
+      titleName,
+      style: const TextStyle(color: Colors.white),
+    ),
+    trailing: iconT,
+  );
 }
